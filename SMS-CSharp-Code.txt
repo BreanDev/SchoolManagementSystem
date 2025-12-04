@@ -1,0 +1,825 @@
+// ============================================
+// SCHOOL MANAGEMENT SYSTEM - C# CODE FILES
+// .NET Core 8.0 with Entity Framework Core
+// ============================================
+
+// ====== 1. PROGRAM.CS - STARTUP CONFIGURATION ======
+
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.EntityFrameworkCore;
+using SchoolManagementSystem.Web.Data;
+using SchoolManagementSystem.Web.Services;
+using System.Configuration;
+
+var builder = WebApplicationBuilder.CreateBuilder(args);
+
+// Add services to the container
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Account/Login";
+        options.LogoutPath = "/Account/Logout";
+        options.AccessDeniedPath = "/Account/AccessDenied";
+    });
+
+builder.Services.AddAuthorization();
+builder.Services.AddRazorPages();
+builder.Services.AddControllersWithViews();
+
+// Register Services
+builder.Services.AddScoped<IStudentService, StudentService>();
+builder.Services.AddScoped<IFinanceService, FinanceService>();
+builder.Services.AddScoped<IRegistrationService, RegistrationService>();
+builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IMenuService, MenuService>();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Error");
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+app.UseRouting();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers();
+app.MapRazorPages();
+
+// Migrate database on startup
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate();
+}
+
+app.Run();
+
+// ====== 2. DBCONTEXT ======
+
+using Microsoft.EntityFrameworkCore;
+using SchoolManagementSystem.Web.Models;
+
+namespace SchoolManagementSystem.Web.Data
+{
+    public class ApplicationDbContext : DbContext
+    {
+        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+            : base(options)
+        {
+        }
+
+        // DbSets
+        public DbSet<StudentDetails> StudentDetails { get; set; }
+        public DbSet<StudentBalance> StudentBalance { get; set; }
+        public DbSet<GradeDetails> GradeDetails { get; set; }
+        public DbSet<Transactions> Transactions { get; set; }
+        public DbSet<ContinuousAssessment> ContinuousAssessment { get; set; }
+        public DbSet<Examination> Examination { get; set; }
+        public DbSet<Fees> Fees { get; set; }
+        public DbSet<Grade> Grade { get; set; }
+        public DbSet<GradeLevel> GradeLevel { get; set; }
+        public DbSet<Subject> Subject { get; set; }
+        public DbSet<GradeSubjectAllocation> GradeSubjectAllocation { get; set; }
+        public DbSet<Semester> Semester { get; set; }
+        public DbSet<AcademicYear> AcademicYear { get; set; }
+        public DbSet<Branch> Branch { get; set; }
+        public DbSet<Department> Department { get; set; }
+        public DbSet<Employee> Employee { get; set; }
+        public DbSet<Users> Users { get; set; }
+        public DbSet<UserProfile> UserProfile { get; set; }
+        public DbSet<Menu> Menu { get; set; }
+        public DbSet<UserForm> UserForm { get; set; }
+        public DbSet<AuditLogs> AuditLogs { get; set; }
+        public DbSet<ErrorLogs> ErrorLogs { get; set; }
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+
+            // Configure relationships and constraints
+            modelBuilder.Entity<StudentDetails>()
+                .HasKey(s => s.ID);
+
+            modelBuilder.Entity<StudentBalance>()
+                .HasIndex(s => s.StudentID)
+                .IsUnique();
+
+            modelBuilder.Entity<Transactions>()
+                .Property(t => t.Amount)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Fees>()
+                .Property(f => f.Amount)
+                .HasPrecision(18, 2);
+
+            // Configure table names
+            modelBuilder.Entity<StudentDetails>().ToTable("StudentDetails");
+            modelBuilder.Entity<StudentBalance>().ToTable("StudentBalance");
+            modelBuilder.Entity<GradeDetails>().ToTable("GradeDetails");
+            modelBuilder.Entity<Transactions>().ToTable("Transactions");
+        }
+    }
+}
+
+// ====== 3. MODELS ======
+
+namespace SchoolManagementSystem.Web.Models
+{
+    public class StudentDetails
+    {
+        public int ID { get; set; }
+        public string StudentID { get; set; }
+        public int BranchID { get; set; }
+        public string FamilyName { get; set; }
+        public string FirstName { get; set; }
+        public string OtherNames { get; set; }
+        public string Gender { get; set; }
+        public DateTime DOB { get; set; }
+        public string NRCNo { get; set; }
+        public string Guardian { get; set; }
+        public string GuardianContact { get; set; }
+        public string Sponsor { get; set; }
+        public string SponsorContact { get; set; }
+        public string MaritalStatus { get; set; }
+        public string Email { get; set; }
+        public string Mobile { get; set; }
+        public string Telephone { get; set; }
+        public string BoxNo { get; set; }
+        public string PlotNo { get; set; }
+        public string Street { get; set; }
+        public string Area { get; set; }
+        public int ProvinceID { get; set; }
+        public int TownID { get; set; }
+        public int NationalityID { get; set; }
+        public int GradeID { get; set; }
+        public int GradeLevelID { get; set; }
+        public int StudyCategoryID { get; set; }
+        public int AcademicYearID { get; set; }
+        public string Comment { get; set; }
+        public byte[] Photo { get; set; }
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; } = DateTime.Now;
+        public DateTime ModifiedDate { get; set; } = DateTime.Now;
+    }
+
+    public class StudentBalance
+    {
+        public int ID { get; set; }
+        public string StudentID { get; set; }
+        public decimal Balance { get; set; }
+        public string Currency { get; set; } = "ZMW";
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class Transactions
+    {
+        public int ID { get; set; }
+        public string AccountCode { get; set; }
+        public int PaymentCategoryID { get; set; }
+        public int FeeID { get; set; }
+        public string StudentID { get; set; }
+        public DateTime? TranDate { get; set; }
+        public string TranDescription { get; set; }
+        public string TranReference { get; set; }
+        public string BatchRef { get; set; }
+        public string TransactionTypeCode { get; set; }
+        public decimal? Amount { get; set; }
+        public string Currency { get; set; } = "ZMW";
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class Fees
+    {
+        public int ID { get; set; }
+        public int BranchID { get; set; }
+        public int GradeLevelID { get; set; }
+        public decimal Amount { get; set; }
+        public string FeeDescription { get; set; }
+        public string Currency { get; set; } = "ZMW";
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class Grade
+    {
+        public int ID { get; set; }
+        public string GradeName { get; set; }
+        public int BranchID { get; set; }
+        public int GradeLevelID { get; set; }
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class GradeLevel
+    {
+        public int ID { get; set; }
+        public string GradeLevelDescription { get; set; }
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class Subject
+    {
+        public int ID { get; set; }
+        public string SubjectCode { get; set; }
+        public string SubjectName { get; set; }
+        public int BranchID { get; set; }
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class GradeDetails
+    {
+        public int ID { get; set; }
+        public int StudentID { get; set; }
+        public int AcademicYearID { get; set; }
+        public int SemesterID { get; set; }
+        public int GradeID { get; set; }
+        public int BranchID { get; set; }
+        public int GradeLevelID { get; set; }
+        public int SubjectID { get; set; }
+        public int? ExamMark { get; set; }
+        public int? CAMark { get; set; }
+        public int? FinalMark { get; set; }
+        public string FinalGrade { get; set; }
+        public string Comment { get; set; }
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class ContinuousAssessment
+    {
+        public int ID { get; set; }
+        public string Year { get; set; }
+        public string StudentID { get; set; }
+        public int? SubjectID { get; set; }
+        public int? GradeLevelID { get; set; }
+        public decimal? Mark { get; set; }
+        public DateTime EnterDate { get; set; }
+        public string EnteredBy { get; set; }
+        public string Comment { get; set; }
+    }
+
+    public class Examination
+    {
+        public int ID { get; set; }
+        public string StudentID { get; set; }
+        public string Year { get; set; }
+        public string CAMark { get; set; }
+        public DateTime? CloseDate { get; set; }
+        public string Comment { get; set; }
+        public DateTime EnterDate { get; set; }
+        public string EnteredBy { get; set; }
+        public string ExamGrade { get; set; }
+        public string FinalCA { get; set; }
+        public string FinalGrade { get; set; }
+        public string ModeratedBy { get; set; }
+        public DateTime? ModeratedDate { get; set; }
+        public string ModeratedGrade { get; set; }
+        public string Status { get; set; }
+        public int SubjectID { get; set; }
+    }
+
+    public class Semester
+    {
+        public int ID { get; set; }
+        public string SemesterDescription { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public int BranchID { get; set; }
+        public int AcademicYearID { get; set; }
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class AcademicYear
+    {
+        public int ID { get; set; }
+        public string AcademicDescription { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class Branch
+    {
+        public int ID { get; set; }
+        public string BranchName { get; set; }
+        public int SchoolID { get; set; }
+        public int ProvinceID { get; set; }
+        public int TownID { get; set; }
+        public string Location { get; set; }
+        public int? ManagerID { get; set; }
+        public string PhoneNumber { get; set; }
+        public string Email { get; set; }
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+        public bool IsActive { get; set; } = true;
+    }
+
+    public class Department
+    {
+        public int ID { get; set; }
+        public string DeptName { get; set; }
+        public int? BranchID { get; set; }
+        public string Email { get; set; }
+        public string Mobile { get; set; }
+        public string Telephone { get; set; }
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class Employee
+    {
+        public int ID { get; set; }
+        public string FamilyName { get; set; }
+        public string FirstName { get; set; }
+        public string OtherName { get; set; }
+        public string Gender { get; set; }
+        public string NRCNo { get; set; }
+        public string PhoneNumber { get; set; }
+        public int PositionID { get; set; }
+        public int QualificationID { get; set; }
+        public int DeptID { get; set; }
+        public int EmploymentTypeID { get; set; }
+        public int BranchID { get; set; }
+        public DateTime DateEngaged { get; set; }
+        public DateTime? DateExpired { get; set; }
+        public string Email { get; set; }
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class Users
+    {
+        public int ID { get; set; }
+        public int ProfileID { get; set; }
+        public string UserName { get; set; }
+        public int? EmployeeID { get; set; }
+        public string Email { get; set; }
+        public string PasswordHash { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public int? BranchID { get; set; }
+        public bool IsActive { get; set; } = true;
+        public bool IsLocked { get; set; } = false;
+        public DateTime? LastLogin { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime? ModifiedDate { get; set; }
+    }
+
+    public class UserProfile
+    {
+        public int ID { get; set; }
+        public string ProfileName { get; set; }
+        public string Description { get; set; }
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class Menu
+    {
+        public int ID { get; set; }
+        public string MenuName { get; set; }
+        public string MenuUrl { get; set; }
+        public string MenuIcon { get; set; }
+        public int? ParentMenuID { get; set; }
+        public int Sequence { get; set; }
+        public bool IsVisible { get; set; }
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class UserForm
+    {
+        public int ID { get; set; }
+        public int MenuID { get; set; }
+        public int ProfileID { get; set; }
+        public bool CanAdd { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+        public bool CanView { get; set; }
+        public string CreatedBy { get; set; }
+        public string ModifiedBy { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class AuditLogs
+    {
+        public int AuditID { get; set; }
+        public int UserID { get; set; }
+        public string Action { get; set; }
+        public string Entity { get; set; }
+        public int? EntityID { get; set; }
+        public string OldValue { get; set; }
+        public string NewValue { get; set; }
+        public string IPAddress { get; set; }
+        public DateTime Timestamp { get; set; }
+    }
+
+    public class ErrorLogs
+    {
+        public int ID { get; set; }
+        public string Error_Code { get; set; }
+        public string Error_Message { get; set; }
+        public string Error_Source { get; set; }
+        public string ErrorDate { get; set; }
+        public string User_Name { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+
+    public class GradeSubjectAllocation
+    {
+        public int ID { get; set; }
+        public int GradeID { get; set; }
+        public int BranchID { get; set; }
+        public int SubjectID { get; set; }
+        public int SemesterID { get; set; }
+        public DateTime CreatedDate { get; set; }
+        public DateTime ModifiedDate { get; set; }
+    }
+}
+
+// ====== 4. SERVICES - STUDENT SERVICE ======
+
+using SchoolManagementSystem.Web.Data;
+using SchoolManagementSystem.Web.Models;
+using Microsoft.EntityFrameworkCore;
+
+namespace SchoolManagementSystem.Web.Services
+{
+    public interface IStudentService
+    {
+        Task<StudentDetails> GetStudentByIDAsync(string studentID);
+        Task<List<StudentDetails>> GetAllStudentsAsync();
+        Task<string> GenerateStudentIDAsync(int academicYear);
+        Task<bool> AddStudentAsync(StudentDetails student);
+        Task<bool> UpdateStudentAsync(StudentDetails student);
+        Task<bool> DeleteStudentAsync(int studentID);
+        Task<decimal> GetStudentBalanceAsync(string studentID);
+        Task<List<GradeDetails>> GetStudentRegistrationAsync(string studentID);
+    }
+
+    public class StudentService : IStudentService
+    {
+        private readonly ApplicationDbContext _context;
+
+        public StudentService(ApplicationDbContext context)
+        {
+            _context = context;
+        }
+
+        public async Task<StudentDetails> GetStudentByIDAsync(string studentID)
+        {
+            return await _context.StudentDetails
+                .FirstOrDefaultAsync(s => s.StudentID == studentID);
+        }
+
+        public async Task<List<StudentDetails>> GetAllStudentsAsync()
+        {
+            return await _context.StudentDetails
+                .OrderBy(s => s.FamilyName)
+                .ThenBy(s => s.FirstName)
+                .ToListAsync();
+        }
+
+        public async Task<string> GenerateStudentIDAsync(int academicYear)
+        {
+            var yearSuffix = academicYear.ToString().Substring(academicYear.ToString().Length - 2);
+            
+            var regNumber = await _context.StudentDetails
+                .Where(s => s.StudentID.StartsWith(yearSuffix))
+                .CountAsync();
+            
+            return yearSuffix + (regNumber + 1).ToString("00");
+        }
+
+        public async Task<bool> AddStudentAsync(StudentDetails student)
+        {
+            try
+            {
+                _context.StudentDetails.Add(student);
+                await _context.SaveChangesAsync();
+                
+                // Create initial student balance
+                var balance = new StudentBalance
+                {
+                    StudentID = student.StudentID,
+                    Balance = 0,
+                    CreatedBy = student.CreatedBy
+                };
+                _context.StudentBalance.Add(balance);
+                await _context.SaveChangesAsync();
+                
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> UpdateStudentAsync(StudentDetails student)
+        {
+            try
+            {
+                _context.StudentDetails.Update(student);
+                await _context.SaveChangesAsync();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> DeleteStudentAsync(int studentID)
+        {
+            try
+            {
+                var student = await _context.StudentDetails.FindAsync(studentID);
+                if (student != null)
+                {
+                    _context.StudentDetails.Remove(student);
+                    await _context.SaveChangesAsync();
+                    return true;
+                }
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<decimal> GetStudentBalanceAsync(string studentID)
+        {
+            var balance = await _context.StudentBalance
+                .FirstOrDefaultAsync(b => b.StudentID == studentID);
+            return balance?.Balance ?? 0;
+        }
+
+        public async Task<List<GradeDetails>> GetStudentRegistrationAsync(string studentID)
+        {
+            return await _context.GradeDetails
+                .Where(g => g.StudentID.ToString() == studentID)
+                .OrderByDescending(g => g.AcademicYearID)
+                .ThenByDescending(g => g.SemesterID)
+                .ToListAsync();
+        }
+    }
+}
+
+// ====== 5. SERVICES - FINANCE SERVICE ======
+
+public interface IFinanceService
+{
+    Task<List<Transactions>> GetStudentTransactionsAsync(string studentID);
+    Task<decimal> GetStudentBalanceAsync(string studentID);
+    Task<bool> RecordPaymentAsync(Transactions transaction);
+    Task<List<Transactions>> GetPaymentReportAsync(DateTime startDate, DateTime endDate);
+    Task<decimal> GetTotalInvoicesAsync(int academicYear);
+    Task<decimal> GetTotalPaymentsAsync(int academicYear);
+}
+
+public class FinanceService : IFinanceService
+{
+    private readonly ApplicationDbContext _context;
+
+    public FinanceService(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<Transactions>> GetStudentTransactionsAsync(string studentID)
+    {
+        return await _context.Transactions
+            .Where(t => t.StudentID == studentID)
+            .OrderByDescending(t => t.TranDate)
+            .ToListAsync();
+    }
+
+    public async Task<decimal> GetStudentBalanceAsync(string studentID)
+    {
+        var balance = await _context.StudentBalance
+            .FirstOrDefaultAsync(b => b.StudentID == studentID);
+        return balance?.Balance ?? 0;
+    }
+
+    public async Task<bool> RecordPaymentAsync(Transactions transaction)
+    {
+        try
+        {
+            _context.Transactions.Add(transaction);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task<List<Transactions>> GetPaymentReportAsync(DateTime startDate, DateTime endDate)
+    {
+        return await _context.Transactions
+            .Where(t => t.TranDate >= startDate && t.TranDate <= endDate && t.TransactionTypeCode == "PAY")
+            .OrderBy(t => t.TranDate)
+            .ToListAsync();
+    }
+
+    public async Task<decimal> GetTotalInvoicesAsync(int academicYear)
+    {
+        return await _context.Transactions
+            .Where(t => t.TransactionTypeCode == "INV" && t.TranDate.Value.Year == academicYear)
+            .SumAsync(t => t.Amount ?? 0);
+    }
+
+    public async Task<decimal> GetTotalPaymentsAsync(int academicYear)
+    {
+        return await _context.Transactions
+            .Where(t => t.TransactionTypeCode == "PAY" && t.TranDate.Value.Year == academicYear)
+            .SumAsync(t => t.Amount ?? 0);
+    }
+}
+
+// ====== 6. SERVICES - OTHER SERVICES ======
+
+public interface IRegistrationService
+{
+    Task<List<Subject>> GetSubjectsByGradeLevelAsync(int gradeLevelID);
+    Task<bool> RegisterStudentAsync(GradeDetails gradeDetails);
+    Task<Fees> GetFeesByGradeLevelAsync(int gradeLevelID, int branchID);
+}
+
+public class RegistrationService : IRegistrationService
+{
+    private readonly ApplicationDbContext _context;
+
+    public RegistrationService(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<Subject>> GetSubjectsByGradeLevelAsync(int gradeLevelID)
+    {
+        return await _context.Subject.ToListAsync();
+    }
+
+    public async Task<bool> RegisterStudentAsync(GradeDetails gradeDetails)
+    {
+        try
+        {
+            _context.GradeDetails.Add(gradeDetails);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task<Fees> GetFeesByGradeLevelAsync(int gradeLevelID, int branchID)
+    {
+        return await _context.Fees
+            .FirstOrDefaultAsync(f => f.GradeLevelID == gradeLevelID && f.BranchID == branchID);
+    }
+}
+
+public interface IReportService
+{
+    Task<List<Transactions>> GetDailyPaymentReportAsync(DateTime date);
+    Task<List<StudentBalance>> GetStudentBalanceReportAsync(int gradeLevelID);
+}
+
+public class ReportService : IReportService
+{
+    private readonly ApplicationDbContext _context;
+
+    public ReportService(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<Transactions>> GetDailyPaymentReportAsync(DateTime date)
+    {
+        return await _context.Transactions
+            .Where(t => t.TransactionTypeCode == "PAY" && t.TranDate.Value.Date == date.Date)
+            .ToListAsync();
+    }
+
+    public async Task<List<StudentBalance>> GetStudentBalanceReportAsync(int gradeLevelID)
+    {
+        return await _context.StudentBalance.ToListAsync();
+    }
+}
+
+public interface IDashboardService
+{
+    Task<DashboardStats> GetDashboardStatsAsync(int academicYear);
+}
+
+public class DashboardService : IDashboardService
+{
+    private readonly ApplicationDbContext _context;
+
+    public DashboardService(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<DashboardStats> GetDashboardStatsAsync(int academicYear)
+    {
+        var stats = new DashboardStats
+        {
+            TotalStudents = await _context.StudentDetails.CountAsync(),
+            TotalInvoices = await _context.Transactions
+                .Where(t => t.TransactionTypeCode == "INV" && t.TranDate.Value.Year == academicYear)
+                .SumAsync(t => t.Amount ?? 0),
+            TotalPayments = await _context.Transactions
+                .Where(t => t.TransactionTypeCode == "PAY" && t.TranDate.Value.Year == academicYear)
+                .SumAsync(t => t.Amount ?? 0),
+            TotalBalance = await _context.StudentBalance.SumAsync(b => b.Balance)
+        };
+        return stats;
+    }
+}
+
+public class DashboardStats
+{
+    public int TotalStudents { get; set; }
+    public decimal TotalInvoices { get; set; }
+    public decimal TotalPayments { get; set; }
+    public decimal TotalBalance { get; set; }
+}
+
+public interface IMenuService
+{
+    Task<List<Menu>> GetMenuByProfileAsync(int profileID);
+}
+
+public class MenuService : IMenuService
+{
+    private readonly ApplicationDbContext _context;
+
+    public MenuService(ApplicationDbContext context)
+    {
+        _context = context;
+    }
+
+    public async Task<List<Menu>> GetMenuByProfileAsync(int profileID)
+    {
+        return await _context.Menu
+            .Where(m => m.IsVisible)
+            .OrderBy(m => m.ParentMenuID)
+            .ThenBy(m => m.Sequence)
+            .ToListAsync();
+    }
+}
